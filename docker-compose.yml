@@ -1,0 +1,24 @@
+version: '3.8'
+
+# Docker Compose configuration
+# Uses .env.local file for environment variables
+# Make sure .env.local file exists before running
+
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fileanalyzer-frontend
+    env_file:
+      - .env.local
+    environment:
+      NODE_ENV: development
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/.next
+    command: npm run dev
+
