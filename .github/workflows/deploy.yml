@@ -52,14 +52,15 @@ jobs:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
-
           # Build image with both SHA tag and latest tag
           # Pass NEXT_PUBLIC_API_URL as build argument for Next.js build
           docker build \
             --build-arg NEXT_PUBLIC_API_URL="${{ steps.get-api-url.outputs.api_url }}" \
+            --target prod \
             -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
             -t $ECR_REGISTRY/$ECR_REPOSITORY:latest \
-            .
+            -f frontend/Dockerfile \
+            frontend
           # Push both tags
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
@@ -69,19 +70,19 @@ jobs:
       - name: Replace placeholders in task definition
         run: |
           # Replace account ID and region placeholders
-          sed -i "s/YOUR_ACCOUNT_ID/${{ steps.get-account-id.outputs.account_id }}/g" task-definition.json
-          sed -i "s/REGION/${{ env.AWS_REGION }}/g" task-definition.json
-          sed -i "s/ACCOUNT_ID/${{ steps.get-account-id.outputs.account_id }}/g" task-definition.json
+          sed -i "s/YOUR_ACCOUNT_ID/${{ steps.get-account-id.outputs.account_id }}/g" frontend/task-definition.json
+          sed -i "s/REGION/${{ env.AWS_REGION }}/g" frontend/task-definition.json
+          sed -i "s/ACCOUNT_ID/${{ steps.get-account-id.outputs.account_id }}/g" frontend/task-definition.json
           # Replace ECR repository placeholder
-          sed -i "s|ECR_REPOSITORY|${{ env.ECR_REPOSITORY }}|g" task-definition.json
+          sed -i "s|ECR_REPOSITORY|${{ env.ECR_REPOSITORY }}|g" frontend/task-definition.json
           # Replace project name placeholder for IAM roles
-          sed -i "s|PROJECT_NAME|${{ env.PROJECT_NAME }}|g" task-definition.json
+          sed -i "s|PROJECT_NAME|${{ env.PROJECT_NAME }}|g" frontend/task-definition.json
 
       - name: Fill in the new image ID in the Amazon ECS task definition
         id: task-def
         uses: aws-actions/amazon-ecs-render-task-definition@v1
         with:
-          task-definition: task-definition.json
+          task-definition: frontend/task-definition.json
           container-name: frontend
           image: ${{ steps.build-image.outputs.image }}
 

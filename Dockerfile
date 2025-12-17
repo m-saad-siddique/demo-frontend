@@ -1,54 +1,37 @@
-# Build stage
-FROM node:20-alpine AS builder
-
+# Base
+FROM node:20-alpine AS base
 WORKDIR /app
 
-# Copy package files
-COPY package.json ./
+# --- Dev target (local dev) ---
+FROM base AS dev
+ENV NODE_ENV=development
+COPY package.json package-lock.json* ./
+# Prefer npm ci when lockfile exists, otherwise npm install
+RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
+COPY . .
+EXPOSE 3000
+CMD ["npm", "run", "dev"]
 
-# Install dependencies (generates package-lock.json if not present)
-RUN npm install
+# --- Build target (static export) ---
+FROM base AS build
+ENV NODE_ENV=development
+COPY package.json package-lock.json* ./
+RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
 
-# Copy source code
+# Switch to production mode after installing build tooling
+ENV NODE_ENV=production
 COPY . .
 
-# Build-time environment variable for Next.js
+# Build-time env baked into the static bundle
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 
-# Build Next.js application
+# Produces /app/out because next.config.ts has output: 'export'
 RUN npm run build
 
-# Production stage
-FROM node:20-alpine
-
-WORKDIR /app
-
-ENV NODE_ENV=production
-
-# Copy package files (including lock file from builder for consistency)
-COPY package.json ./
-COPY --from=builder /app/package-lock.json* ./
-
-# Install production dependencies only
-RUN npm install --omit=dev
-
-# Copy built application from builder
-COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/next.config.ts ./
-COPY --from=builder /app/tsconfig.json ./
-# Ensure public directory exists (Next.js works fine with empty public directory)
-RUN mkdir -p ./public
-# Copy public directory contents if it exists in builder
-COPY --from=builder /app/public ./public/
-
-# Expose port
-EXPOSE 3000
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:3000', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
-
-# Start Next.js server
-CMD ["npm", "start"]
+# --- Prod target (nginx serves static site) ---
+FROM nginx:1.25-alpine AS prod
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /app/out /usr/share/nginx/html
+EXPOSE 80
 
