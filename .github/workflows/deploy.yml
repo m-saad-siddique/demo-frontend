@@ -39,7 +39,7 @@ jobs:
       - name: Get API URL from Parameter Store
         id: get-api-url
         run: |
-          API_URL=$(aws ssm get-parameter --name "/ecs/frontend/API_URL" --query 'Parameter.Value' --output text)
+          API_URL=$(aws ssm get-parameter --name "/ecs/frontend/API_URL" --query 'Parameter.Value' --with-decryption  --output text)
           echo "api_url=$API_URL" >> $GITHUB_OUTPUT
 
       - name: Login to Amazon ECR
